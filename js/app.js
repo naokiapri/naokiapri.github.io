@@ -17,21 +17,18 @@ async function setup() {
     
         if (!window.RNBO) {
             // Load RNBO script dynamically
-            // Note that you can skip this by knowing the RNBO version of your patch
-            // beforehand and just include it using a <script> tag
             await loadRNBOScript(patcher.desc.meta.rnboversion);
         }
-
     } catch (err) {
         const errorContext = {
             error: err
         };
         if (response && (response.status >= 300 || response.status < 200)) {
-            errorContext.header = `Couldn't load patcher export bundle`,
+            errorContext.header = `Couldn't load patcher export bundle`;
             errorContext.description = `Check app.js to see what file it's trying to load. Currently it's` +
-            ` trying to load "${patchExportURL}". If that doesn't` + 
-            ` match the name of the file you exported from RNBO, modify` + 
-            ` patchExportURL in app.js.`;
+                ` trying to load "${patchExportURL}". If that doesn't` + 
+                ` match the name of the file you exported from RNBO, modify` + 
+                ` patchExportURL in app.js.`;
         }
         if (typeof guardrails === "function") {
             guardrails(errorContext);
@@ -46,8 +43,6 @@ async function setup() {
     try {
         const dependenciesResponse = await fetch("export/dependencies.json");
         dependencies = await dependenciesResponse.json();
-
-        // Prepend "export" to any file dependenciies
         dependencies = dependencies.map(d => d.file ? Object.assign({}, d, { file: "export/" + d.file }) : d);
     } catch (e) {}
 
@@ -91,11 +86,14 @@ async function setup() {
 
     document.body.onclick = () => {
         context.resume();
-    }
+    };
 
     // Skip if you're not using guardrails.js
     if (typeof guardrails === "function")
         guardrails();
+
+    // Return the device for use elsewhere
+    return device;
 }
 
 function loadRNBOScript(version) {
@@ -119,19 +117,10 @@ function makeSliders(device) {
     let noParamLabel = document.getElementById("no-param-label");
     if (noParamLabel && device.numParameters > 0) pdiv.removeChild(noParamLabel);
 
-    // This will allow us to ignore parameter update events while dragging the slider.
     let isDraggingSlider = false;
     let uiElements = {};
 
     device.parameters.forEach(param => {
-        // Subpatchers also have params. If we want to expose top-level
-        // params only, the best way to determine if a parameter is top level
-        // or not is to exclude parameters with a '/' in them.
-        // You can uncomment the following line if you don't want to include subpatcher params
-        
-        //if (param.id.includes("/")) return;
-
-        // Create a label, an input slider and a value display
         let label = document.createElement("label");
         let slider = document.createElement("input");
         let text = document.createElement("input");
@@ -140,13 +129,11 @@ function makeSliders(device) {
         sliderContainer.appendChild(slider);
         sliderContainer.appendChild(text);
 
-        // Add a name for the label
         label.setAttribute("name", param.name);
         label.setAttribute("for", param.name);
         label.setAttribute("class", "param-label");
         label.textContent = `${param.name}: `;
 
-        // Make each slider reflect its parameter
         slider.setAttribute("type", "range");
         slider.setAttribute("class", "param-slider");
         slider.setAttribute("id", param.id);
@@ -160,11 +147,9 @@ function makeSliders(device) {
         }
         slider.setAttribute("value", param.value);
 
-        // Make a settable text input display for the value
         text.setAttribute("value", param.value.toFixed(1));
         text.setAttribute("type", "text");
 
-        // Make each slider control its parameter
         slider.addEventListener("pointerdown", () => {
             isDraggingSlider = true;
         });
@@ -178,7 +163,6 @@ function makeSliders(device) {
             param.value = value;
         });
 
-        // Make the text box input control the parameter value as well
         text.addEventListener("keydown", (ev) => {
             if (ev.key === "Enter") {
                 let newValue = Number.parseFloat(text.value);
@@ -193,14 +177,10 @@ function makeSliders(device) {
             }
         });
 
-        // Store the slider and text by name so we can access them later
         uiElements[param.id] = { slider, text };
-
-        // Add the slider element
         pdiv.appendChild(sliderContainer);
     });
 
-    // Listen to parameter changes from the device
     device.parameterChangeEvent.subscribe(param => {
         if (!isDraggingSlider)
             uiElements[param.id].slider.value = param.value;
@@ -215,8 +195,6 @@ function makeInportForm(device) {
     const inportForm = document.getElementById("inport-form");
     let inportTag = null;
     
-    // Device messages correspond to inlets/outlets or inports/outports
-    // You can filter for one or the other using the "type" of the message
     const messages = device.messages;
     const inports = messages.filter(message => message.type === RNBO.MessagePortType.Inport);
 
@@ -234,13 +212,8 @@ function makeInportForm(device) {
         inportTag = inportSelect.value;
 
         inportForm.onsubmit = (ev) => {
-            // Do this or else the page will reload
             ev.preventDefault();
-
-            // Turn the text into a list of numbers (RNBO messages must be numbers, not text)
             const values = inportText.value.split(/\s+/).map(s => parseFloat(s));
-            
-            // Send the message event to the RNBO device
             let messageEvent = new RNBO.MessageEvent(RNBO.TimeNow, inportTag, values);
             device.scheduleEvent(messageEvent);
         }
@@ -256,13 +229,8 @@ function attachOutports(device) {
 
     document.getElementById("rnbo-console").removeChild(document.getElementById("no-outports-label"));
     device.messageEvent.subscribe((ev) => {
-
-        // Ignore message events that don't belong to an outport
         if (outports.findIndex(elt => elt.tag === ev.tag) < 0) return;
-
-        // Message events have a tag as well as a payload
         console.log(`${ev.tag}: ${ev.payload}`);
-
         document.getElementById("rnbo-console-readout").innerText = `${ev.tag}: ${ev.payload}`;
     });
 }
@@ -299,41 +267,19 @@ function makeMIDIKeyboard(device) {
         key.appendChild(label);
         key.addEventListener("pointerdown", () => {
             let midiChannel = 0;
-
-            // Format a MIDI message paylaod, this constructs a MIDI on event
-            let noteOnMessage = [
-                144 + midiChannel, // Code for a note on: 10010000 & midi channel (0-15)
-                note, // MIDI Note
-                100 // MIDI Velocity
-            ];
-        
-            let noteOffMessage = [
-                128 + midiChannel, // Code for a note off: 10000000 & midi channel (0-15)
-                note, // MIDI Note
-                0 // MIDI Velocity
-            ];
-        
-            // Including rnbo.min.js (or the unminified rnbo.js) will add the RNBO object
-            // to the global namespace. This includes the TimeNow constant as well as
-            // the MIDIEvent constructor.
+            let noteOnMessage = [144 + midiChannel, note, 100];
+            let noteOffMessage = [128 + midiChannel, note, 0];
             let midiPort = 0;
             let noteDurationMs = 250;
-        
-            // When scheduling an event to occur in the future, use the current audio context time
-            // multiplied by 1000 (converting seconds to milliseconds) for now.
             let noteOnEvent = new RNBO.MIDIEvent(device.context.currentTime * 1000, midiPort, noteOnMessage);
             let noteOffEvent = new RNBO.MIDIEvent(device.context.currentTime * 1000 + noteDurationMs, midiPort, noteOffMessage);
-        
             device.scheduleEvent(noteOnEvent);
             device.scheduleEvent(noteOffEvent);
-
             key.classList.add("clicked");
         });
-
         key.addEventListener("pointerup", () => key.classList.remove("clicked"));
-
         mdiv.appendChild(key);
     });
 }
 
-setup();
+// Note: setup() is not called here; it’s called in index.html

@@ -48,7 +48,6 @@
             <h2>Parameters</h2>
             <em id="no-param-label">No parameters</em>
         </div>
-        <!-- Add the displayText div here so it’s visible and available -->
         <div id="displayText">Loading text...</div>
     </div>
 
@@ -56,54 +55,55 @@
     <script type="text/javascript" src="js/guardrails.js"></script>
     <script type="text/javascript" src="js/app.js"></script>
 
-    <!-- Updated JavaScript for fetching Google Sheets data -->
+    <!-- Updated JavaScript for fetching Google Sheets data and sending to inport -->
     <script>
-        async function fetchFormData() {
-        const spreadsheetId = '1KX1nxT26R1eoo2GvH5WaLn-IB6xyHVh2aWN55nJvFTw';
-        const apiKey = 'AIzaSyD3NNNUgOu2nU9jQJq0wWIk2EBgECzoYdE';
-        const range = 'Sheet1!D:D'; // Fetching Column D
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+        async function fetchFormData(device) {
+            const spreadsheetId = '1KX1nxT26R1eoo2GvH5WaLn-IB6xyHVh2aWN55nJvFTw';
+            const apiKey = 'AIzaSyD3NNNUgOu2nU9jQJq0wWIk2EBgECzoYdE'; // Corrected API key
+            const range = 'Sheet1!D:D';
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
 
-        try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const data = await response.json();
+                if (!data.values || data.values.length === 0) {
+                    document.getElementById('displayText').innerText = 'No data found in Column D';
+                    console.log('No data in the specified range');
+                    return;
+                }
+                const latestText = data.values[data.values.length - 1][0];
+                document.getElementById('displayText').innerText = latestText;
+                console.log('Latest text:', latestText);
+
+                // Count the number of letters (excluding spaces and punctuation)
+                const letterCount = latestText.replace(/[^a-zA-Z]/g, '').length;
+                console.log('Letter count:', letterCount);
+
+                // Send the letter count to the 'comments' inport
+                if (device) {
+                    const messageEvent = new RNBO.MessageEvent(RNBO.TimeNow, 'comments', [letterCount]);
+                    device.scheduleEvent(messageEvent);
+                    console.log(`Sent ${letterCount} to 'comments' inport`);
+                } else {
+                    console.error('RNBO device not available');
+                }
+            } catch (error) {
+                document.getElementById('displayText').innerText = 'Error loading text';
+                console.error('Error fetching data:', error);
+            }
         }
-        const data = await response.json();
-        if (!data.values || data.values.length === 0) {
-            document.getElementById('displayText').innerText = 'No data found in Column D';
-            console.log('No data in the specified range');
-            return;
-        }
-        const latestText = data.values[data.values.length - 1][0]; // Latest entry in Column D
-        document.getElementById('displayText').innerText = latestText;
-        console.log('Latest text:', latestText);
 
-        // Count the number of letters (excluding spaces and punctuation)
-        const letterCount = latestText.replace(/[^a-zA-Z]/g, '').length;
-        console.log('Letter count:', letterCount);
-
-        // Send the letter count to the 'comments' inport
-        if (window.device && typeof window.device.messageInport === 'function') {
-            window.device.messageInport('comments', letterCount);
-            console.log(`Sent ${letterCount} to 'comments' inport`);
-        } else {
-            console.error('RNBO device not initialized or messageInport not available');
-        }
-    } catch (error) {
-        document.getElementById('displayText').innerText = 'Error loading text';
-        console.error('Error fetching data:', error);
-    }
-}
-
-// Run the function when the DOM is fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-    fetchFormData();
-});
-
-        // Run the function when the DOM is fully loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchFormData();
+        // Run setup and then fetchFormData when the DOM is loaded
+        document.addEventListener('DOMContentLoaded', async () => {
+            const device = await setup(); // Wait for RNBO device to be ready
+            if (device) {
+                await fetchFormData(device); // Pass the device to fetchFormData
+            } else {
+                console.error('Failed to initialize RNBO device');
+            }
         });
     </script>
 
