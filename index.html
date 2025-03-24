@@ -13,9 +13,9 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <svg id="background" width="100%" height="100%"></svg>
     <div id="rnbo-root">
-		<div>
-			<h1 id="patcher-title">Unnamed patcher</h1>
-		</div>
+        <div>
+            <h1 id="patcher-title">Unnamed patcher</h1>
+        </div>
         <div id="rnbo-clickable-keyboard">
             <h2>MIDI Keyboard</h2>
             <em id="no-midi-label">No MIDI input</em>
@@ -31,56 +31,65 @@
                 </div>
             </form>
         </div>
-		<div id="rnbo-console">
-			<h2>Outports</h2>
-			<em id="no-outports-label">No outports available</em>
-			<div id="rnbo-console-div">
-				<p id="rnbo-console-readout">Waiting for messages...</p>
-				<em id="rnbo-console-description">Check the developer console for more messages from the RNBO device</em>
-			</div>
-		</div>
-		<div id="rnbo-presets">
-			<h2>Presets</h2>
-			<em id="no-presets-label">No presets defined</em>
-			<select id="preset-select"></select>
-		</div>
+        <div id="rnbo-console">
+            <h2>Outports</h2>
+            <em id="no-outports-label">No outports available</em>
+            <div id="rnbo-console-div">
+                <p id="rnbo-console-readout">Waiting for messages...</p>
+                <em id="rnbo-console-description">Check the developer console for more messages from the RNBO device</em>
+            </div>
+        </div>
+        <div id="rnbo-presets">
+            <h2>Presets</h2>
+            <em id="no-presets-label">No presets defined</em>
+            <select id="preset-select"></select>
+        </div>
         <div id="rnbo-parameter-sliders">
             <h2>Parameters</h2>
             <em id="no-param-label">No parameters</em>
         </div>
+        <!-- Add the displayText div here so it’s visible and available -->
+        <div id="displayText">Loading text...</div>
     </div>
 
-    <!-- Load the script that creates the RNBO device  -->
-    <!-- Uncomment if you know the version of your exported RNBO patch to avoid dynamic loading -->
-    <!-- <script type="text/javascript" src="https://cdn.cycling74.com/rnbo/latest/rnbo.min.js"></script> -->
-
-    <!-- (Optional) The guardrails.js script isn't required for RNBO to work, and you can skip including it -->
-    <!-- It simply offers some helpful error messages for common problems -->
+    <!-- Load the script that creates the RNBO device -->
     <script type="text/javascript" src="js/guardrails.js"></script>
-
-    <!-- Import RNBO Engine Wrapper -->
-    <!-- Make sure to include the RNBO engine version to the version of your exported code, found in rnbopackage.json -->
     <script type="text/javascript" src="js/app.js"></script>
 
-<script> 
+    <!-- Updated JavaScript for fetching Google Sheets data -->
+    <script>
+        async function fetchFormData() {
+            const spreadsheetId = '1KX1nxT26R1eoo2GvH5WaLn-IB6xyHVh2aWN55nJvFTw';
+            const apiKey = 'AIzaSyD3NNNUgOu2nU9jQJ0wWIk2EBgECzoYdE';
+            const range = 'Sheet1!D:D'; // Fetching Column D
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
 
-async function fetchFormData() {
-  const spreadsheetId = '1KX1nxT26R1eoo2GvH5WaLn-IB6xyHVh2aWN55nJvFTw';
-  const apiKey = 'AIzaSyD3NNNUgOu2nU9jQJq0wWIk2EBgECzoYdE';
-  const range = 'Sheet1!D:D'; // Adjust based on where your text is stored
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const data = await response.json();
+                if (!data.values || data.values.length === 0) {
+                    document.getElementById('displayText').innerText = 'No data found in Column D';
+                    console.log('No data in the specified range');
+                    return;
+                }
+                const latestText = data.values[data.values.length - 1][0]; // Latest entry in Column D
+                document.getElementById('displayText').innerText = latestText;
+                console.log('Latest text:', latestText);
+            } catch (error) {
+                document.getElementById('displayText').innerText = 'Error loading text';
+                console.error('Error fetching data:', error);
+            }
+        }
 
-  const response = await fetch(url);
-  const data = await response.json();
-  const latestText = data.values[data.values.length - 1][0]; // Get the latest submission
-  document.getElementById('displayText').innerText = latestText; // Display it
-}
+        // Run the function when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchFormData();
+        });
+    </script>
 
-fetchFormData();
-
-</script>
-
-<div id="displayText"></div>
-
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9254e64e6f68b001',t:'MTc0MjgwNjAwMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
