@@ -61,5 +61,26 @@
     <!-- Import RNBO Engine Wrapper -->
     <!-- Make sure to include the RNBO engine version to the version of your exported code, found in rnbopackage.json -->
     <script type="text/javascript" src="js/app.js"></script>
+
+<script> 
+
+async function fetchFormData() {
+  const spreadsheetId = '1KX1nxT26R1eoo2GvH5WaLn-IB6xyHVh2aWN55nJvFTw';
+  const apiKey = 'AIzaSyD3NNNUgOu2nU9jQJq0wWIk2EBgECzoYdE';
+  const range = 'Sheet1!D:D'; // Adjust based on where your text is stored
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+  const latestText = data.values[data.values.length - 1][0]; // Get the latest submission
+  document.getElementById('displayText').innerText = latestText; // Display it
+}
+
+fetchFormData();
+
+</script>
+
+<div id="displayText"></div>
+
 </body>
 </html>
