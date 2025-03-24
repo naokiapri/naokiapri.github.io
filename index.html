@@ -59,30 +59,47 @@
     <!-- Updated JavaScript for fetching Google Sheets data -->
     <script>
         async function fetchFormData() {
-            const spreadsheetId = '1KX1nxT26R1eoo2GvH5WaLn-IB6xyHVh2aWN55nJvFTw';
-            const apiKey = 'AIzaSyD3NNNUgOu2nU9jQJq0wWIk2EBgECzoYdE';
-            const range = 'Sheet1!D:D'; // Fetching Column D
-            const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+        const spreadsheetId = '1KX1nxT26R1eoo2GvH5WaLn-IB6xyHVh2aWN55nJvFTw';
+        const apiKey = 'AIzaSyD3NNNUgOu2nU9jQJ0wWIk2EBgECzoYdE';
+        const range = 'Sheet1!D:D'; // Fetching Column D
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
 
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                const data = await response.json();
-                if (!data.values || data.values.length === 0) {
-                    document.getElementById('displayText').innerText = 'No data found in Column D';
-                    console.log('No data in the specified range');
-                    return;
-                }
-                const latestText = data.values[data.values.length - 1][0]; // Latest entry in Column D
-                document.getElementById('displayText').innerText = latestText;
-                console.log('Latest text:', latestText);
-            } catch (error) {
-                document.getElementById('displayText').innerText = 'Error loading text';
-                console.error('Error fetching data:', error);
-            }
+        try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
         }
+        const data = await response.json();
+        if (!data.values || data.values.length === 0) {
+            document.getElementById('displayText').innerText = 'No data found in Column D';
+            console.log('No data in the specified range');
+            return;
+        }
+        const latestText = data.values[data.values.length - 1][0]; // Latest entry in Column D
+        document.getElementById('displayText').innerText = latestText;
+        console.log('Latest text:', latestText);
+
+        // Count the number of letters (excluding spaces and punctuation)
+        const letterCount = latestText.replace(/[^a-zA-Z]/g, '').length;
+        console.log('Letter count:', letterCount);
+
+        // Send the letter count to the 'comments' inport
+        if (window.device && typeof window.device.messageInport === 'function') {
+            window.device.messageInport('comments', letterCount);
+            console.log(`Sent ${letterCount} to 'comments' inport`);
+        } else {
+            console.error('RNBO device not initialized or messageInport not available');
+        }
+    } catch (error) {
+        document.getElementById('displayText').innerText = 'Error loading text';
+        console.error('Error fetching data:', error);
+    }
+}
+
+// Run the function when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+    fetchFormData();
+});
 
         // Run the function when the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
