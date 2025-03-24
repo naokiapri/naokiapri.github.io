@@ -186,85 +186,48 @@
             }
         }
 
-        // Function to encode AudioBuffer as WAV
-        function bufferToWave(abuffer) {
-            const numOfChan = abuffer.numberOfChannels;
-            const length = abuffer.length * numOfChan * 2 + 44;
-            const buffer = new ArrayBuffer(length);
-            const view = new DataView(buffer);
-            const channels = [];
-            let offset = 0;
-
-            function writeString(view, offset, string) {
-                for (let i = 0; i < string.length; i++) {
-                    view.setUint8(offset + i, string.charCodeAt(i));
-                }
-            }
-
-            writeString(view, offset, 'RIFF'); offset += 4;
-            view.setUint32(offset, length - 8, true); offset += 4;
-            writeString(view, offset, 'WAVE'); offset += 4;
-            writeString(view, offset, 'fmt '); offset += 4;
-            view.setUint32(offset, 16, true); offset += 4;
-            view.setUint16(offset, 1, true); offset += 2;
-            view.setUint16(offset, numOfChan, true); offset += 2;
-            view.setUint32(offset, abuffer.sampleRate, true); offset += 4;
-            view.setUint32(offset, abuffer.sampleRate * numOfChan * 2, true); offset += 4;
-            view.setUint16(offset, numOfChan * 2, true); offset += 2;
-            view.setUint16(offset, 16, true); offset += 2;
-            writeString(view, offset, 'data'); offset += 4;
-            view.setUint32(offset, abuffer.length * numOfChan * 2, true); offset += 4;
-
-            for (let i = 0; i < abuffer.numberOfChannels; i++) {
-                channels.push(abuffer.getChannelData(i));
-            }
-            for (let i = 0; i < abuffer.length; i++) {
-                for (let channel = 0; channel < numOfChan; channel++) {
-                    const sample = Math.max(-1, Math.min(1, channels[channel][i])) * 32767;
-                    view.setInt16(offset, sample | 0, true);
-                    offset += 2;
-                }
-            }
-
-            return buffer;
-        }
-
-        async function exportAudio(device) {
-            if (!device) {
-                console.error('RNBO device not available for export');
+        async function recordAndExportAudio(device) {
+            if (!device || !device.node) {
+                console.error('RNBO device or node not available for recording');
                 return;
             }
 
-            const sampleRate = 44100; // Standard sample rate
-            const duration = 60; // 1 minute in seconds
-            const offlineContext = new OfflineAudioContext(2, sampleRate * duration, sampleRate);
+            // Create a MediaStream destination for recording
+            const context = device.context;
+            const streamDestination = context.createMediaStreamDestination();
+            device.node.connect(streamDestination);
 
-            // Create a new RNBO device for offline rendering
-            const patcher = await (await fetch('export/patch.export.json')).json();
-            const offlineDevice = await RNBO.createDevice({ context: offlineContext, patcher });
-            offlineDevice.node.connect(offlineContext.destination);
+            // Start recording with MediaRecorder
+            const recorder = new MediaRecorder(streamDestination.stream);
+            const chunks = [];
 
-            // Use the latest displayed text or a default
-            const text = document.getElementById('displayText').innerText || 'Default text';
-            const letterCount = text.replace(/[^a-zA-Z]/g, '').length;
-            const messageEvent = new RNBO.MessageEvent(RNBO.TimeNow, 'comments', [letterCount]);
-            offlineDevice.scheduleEvent(messageEvent);
+            recorder.ondataavailable = (e) => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/webm' }); // WebM is default for MediaRecorder
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'rnbo_output.webm'; // Using WebM format
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                console.log('Recording exported successfully');
+            };
 
-            // Render audio
-            const audioBuffer = await offlineContext.startRendering();
-            console.log('Audio rendered successfully');
+            // Start recording and stop after 60 seconds
+            recorder.start();
+            console.log('Recording started...');
+            document.getElementById('export-audio').disabled = true; // Disable button during recording
+            document.getElementById('export-audio').textContent = 'Recording (60s)...';
 
-            // Convert to WAV and trigger download
-            const wavBuffer = bufferToWave(audioBuffer);
-            const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'rnbo_output.wav';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            setTimeout(() => {
+                recorder.stop();
+                device.node.disconnect(streamDestination);
+                document.getElementById('export-audio').disabled = false;
+                document.getElementById('export-audio').textContent = 'Record & Export Audio';
+                console.log('Recording stopped');
+            }, 60000); // 60 seconds
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -275,7 +238,7 @@
                 await fetchFormData(device);
 
                 document.getElementById('export-audio').addEventListener('click', () => {
-                    exportAudio(device);
+                    recordAndExportAudio(device);
                 });
             } else {
                 console.error('Failed to initialize RNBO device');
