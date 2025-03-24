@@ -1,98 +1,75 @@
 async function setup() {
     const patchExportURL = "export/patch.export.json";
 
-    // Create AudioContext
     const WAContext = window.AudioContext || window.webkitAudioContext;
     const context = new WAContext();
-
-    // Create gain node and connect it to audio output
     const outputNode = context.createGain();
     outputNode.connect(context.destination);
     
-    // Fetch the exported patcher
     let response, patcher;
     try {
+        console.log("Fetching patch file from:", patchExportURL);
         response = await fetch(patchExportURL);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch patch file: ${response.status} ${response.statusText}`);
+        }
         patcher = await response.json();
+        console.log("Patch file loaded successfully");
     
         if (!window.RNBO) {
-            // Load RNBO script dynamically
+            console.log("Loading RNBO script for version:", patcher.desc.meta.rnboversion);
             await loadRNBOScript(patcher.desc.meta.rnboversion);
+            console.log("RNBO script loaded");
         }
     } catch (err) {
-        const errorContext = {
-            error: err
-        };
-        if (response && (response.status >= 300 || response.status < 200)) {
-            errorContext.header = `Couldn't load patcher export bundle`;
-            errorContext.description = `Check app.js to see what file it's trying to load. Currently it's` +
-                ` trying to load "${patchExportURL}". If that doesn't` + 
-                ` match the name of the file you exported from RNBO, modify` + 
-                ` patchExportURL in app.js.`;
-        }
+        console.error("Error loading patch:", err);
         if (typeof guardrails === "function") {
-            guardrails(errorContext);
-        } else {
-            throw err;
+            guardrails({ error: err });
         }
         return;
     }
     
-    // (Optional) Fetch the dependencies
     let dependencies = [];
     try {
         const dependenciesResponse = await fetch("export/dependencies.json");
         dependencies = await dependenciesResponse.json();
         dependencies = dependencies.map(d => d.file ? Object.assign({}, d, { file: "export/" + d.file }) : d);
-    } catch (e) {}
+        console.log("Dependencies loaded:", dependencies);
+    } catch (e) {
+        console.log("No dependencies found or failed to load:", e);
+    }
 
-    // Create the device
     let device;
     try {
+        console.log("Creating RNBO device...");
         device = await RNBO.createDevice({ context, patcher });
+        console.log("RNBO device created successfully");
     } catch (err) {
+        console.error("Error creating RNBO device:", err);
         if (typeof guardrails === "function") {
             guardrails({ error: err });
-        } else {
-            throw err;
         }
         return;
     }
 
-    // (Optional) Load the samples
-    if (dependencies.length)
+    if (dependencies.length) {
+        console.log("Loading dependencies into device...");
         await device.loadDataBufferDependencies(dependencies);
+        console.log("Dependencies loaded into device");
+    }
 
-    // Connect the device to the web audio graph
     device.node.connect(outputNode);
-
-    // (Optional) Extract the name and rnbo version of the patcher from the description
     document.getElementById("patcher-title").innerText = (patcher.desc.meta.filename || "Unnamed Patcher") + " (v" + patcher.desc.meta.rnboversion + ")";
-
-    // (Optional) Automatically create sliders for the device parameters
     makeSliders(device);
-
-    // (Optional) Create a form to send messages to RNBO inputs
     makeInportForm(device);
-
-    // (Optional) Attach listeners to outports so you can log messages from the RNBO patcher
-    attachOutports(device);
-
-    // (Optional) Load presets, if any
-    loadPresets(device, patcher);
-
-    // (Optional) Connect MIDI inputs
-    makeMIDIKeyboard(device);
 
     document.body.onclick = () => {
         context.resume();
     };
 
-    // Skip if you're not using guardrails.js
     if (typeof guardrails === "function")
         guardrails();
 
-    // Return the device for use elsewhere
     return device;
 }
 
@@ -219,67 +196,3 @@ function makeInportForm(device) {
         }
     }
 }
-
-function attachOutports(device) {
-    const outports = device.outports;
-    if (outports.length < 1) {
-        document.getElementById("rnbo-console").removeChild(document.getElementById("rnbo-console-div"));
-        return;
-    }
-
-    document.getElementById("rnbo-console").removeChild(document.getElementById("no-outports-label"));
-    device.messageEvent.subscribe((ev) => {
-        if (outports.findIndex(elt => elt.tag === ev.tag) < 0) return;
-        console.log(`${ev.tag}: ${ev.payload}`);
-        document.getElementById("rnbo-console-readout").innerText = `${ev.tag}: ${ev.payload}`;
-    });
-}
-
-function loadPresets(device, patcher) {
-    let presets = patcher.presets || [];
-    if (presets.length < 1) {
-        document.getElementById("rnbo-presets").removeChild(document.getElementById("preset-select"));
-        return;
-    }
-
-    document.getElementById("rnbo-presets").removeChild(document.getElementById("no-presets-label"));
-    let presetSelect = document.getElementById("preset-select");
-    presets.forEach((preset, index) => {
-        const option = document.createElement("option");
-        option.innerText = preset.name;
-        option.value = index;
-        presetSelect.appendChild(option);
-    });
-    presetSelect.onchange = () => device.setPreset(presets[presetSelect.value].preset);
-}
-
-function makeMIDIKeyboard(device) {
-    let mdiv = document.getElementById("rnbo-clickable-keyboard");
-    if (device.numMIDIInputPorts === 0) return;
-
-    mdiv.removeChild(document.getElementById("no-midi-label"));
-
-    const midiNotes = [49, 52, 56, 63];
-    midiNotes.forEach(note => {
-        const key = document.createElement("div");
-        const label = document.createElement("p");
-        label.textContent = note;
-        key.appendChild(label);
-        key.addEventListener("pointerdown", () => {
-            let midiChannel = 0;
-            let noteOnMessage = [144 + midiChannel, note, 100];
-            let noteOffMessage = [128 + midiChannel, note, 0];
-            let midiPort = 0;
-            let noteDurationMs = 250;
-            let noteOnEvent = new RNBO.MIDIEvent(device.context.currentTime * 1000, midiPort, noteOnMessage);
-            let noteOffEvent = new RNBO.MIDIEvent(device.context.currentTime * 1000 + noteDurationMs, midiPort, noteOffMessage);
-            device.scheduleEvent(noteOnEvent);
-            device.scheduleEvent(noteOffEvent);
-            key.classList.add("clicked");
-        });
-        key.addEventListener("pointerup", () => key.classList.remove("clicked"));
-        mdiv.appendChild(key);
-    });
-}
-
-// Note: setup() is not called here; it’s called in index.html
